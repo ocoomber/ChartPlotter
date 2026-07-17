@@ -9,6 +9,8 @@
 - Hamburger button (top-left) toggles `#panel.open`
 - Close button (✕) in panel header also toggles
 - Map fills full viewport when panel is closed
+- All draggable markers use `bubblingMouseEvents: false` + 44px touch target (waypoints and measure markers)
+- **Known issue**: Measure tool marker drag breaks on Android Chrome — touch/pointer events from marker icon still reach map pan handler despite `bubblingMouseEvents: false` and explicit `touchstart/touchmove/touchend stopPropagation`
 
 ## Serving
 - **Must serve via HTTP** for OSM tile referrer policy — OSM blocks `file://`
@@ -29,6 +31,8 @@
 - `insertWaypointAtIndex(lat, lon, idx)` inserts a waypoint at a given index (used by clicking on a route leg)
 - Route rendered as `segmentPolylines[]` — one `L.polyline` per leg, each with a sticky tooltip showing `dist NM @ brg°T`
 - Clicking a segment polyline inserts a new waypoint between the two endpoints
+- Leg list table replaces the old waypoint table — each row shows Leg #, Dist, Brg, and a remove button
+- Header count: `3 wps, 2 legs`
 
 ## Measure tool
 - Toggle button in actions bar. When active, map click does **not** add waypoints.
@@ -50,24 +54,30 @@
 
 ## Wind overlay (Open-Meteo)
 - Toggle checkbox enables/disables. Fetches from `api.open-meteo.com/v1/forecast`
-- Builds a 7×7 grid around route (or map center if no route)
+- Builds a 21×21 grid around route (or map center if no route)
 - API returns array of per-location objects: `data[n].hourly.wind_speed_10m[hour]`
-- 16-day forecast window only — departure times outside this show a note
+- 16-day forecast window — departure constrained to now + 13 days (3-day fetch must fit within 16-day window)
 - Bilinear spatial interpolation (u/v), linear temporal interpolation
-- Purple arrows: grid arrows (transparent, small) + waypoint arrows (opaque, offset windward, tooltip shows time)
-- Slider represents hours after departure time: `+0h (14:00Z)`, `+6h (20:00Z)`, etc.
+- Purple arrows: grid arrows (transparent, small) + waypoint arrows (opaque, offset windward, tooltip shows local time)
+- Slider represents hours after departure time: `+0h (14:00)`, `+6h (20:00)`, etc. (local timezone, not Z)
 
 ## Export/Import
 - GPX v1.1 (`trkpt lat/lon` at 5dp), CSV (`lat, lon` per line)
 - Import CSV reads from file picker (not textarea)
 - Downloads use Blob + object URL
 
+## Build number
+- Placeholder `<!--BUILD_NUMBER-->` in `index.html` (panel header)
+- CI workflow `.github/workflows/deploy.yml` replaces it via `sed` before deploying to Pages
+- Format: `Build {run_number} — {timestamp}` where run_number is GitHub Actions' auto-increment and timestamp is UK local time (BST/GMT)
+- Invisible in local dev (HTML comment), appears only on deployed site
+
 ## Panel layout (top to bottom)
-1. Header (Marine toggle checkbox)
+1. Header (Marine toggle checkbox, build number)
 2. Actions bar (Clear All, Export GPX, Export CSV, Measure, Import CSV)
-3. Wind overlay section (checkbox, departure time, speed, slider, mode radio, note)
+3. Wind overlay section (checkbox, departure time, speed, slider, note)
 4. Variation section (degrees, W/E select)
-5. Waypoint list (number, lat, lon, distance, bearing, remove button)
+5. Leg list (leg, dist, brg, remove button)
 6. Total distance row
 
 ## Key constraints
