@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="unsafe-url">
+<title>Chart Plotter</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: system-ui, -apple-system, sans-serif; font-size: 14px; color: #1a1a1a; }
+body { display: flex; }
+#map { flex: 1; height: 100%; }
+#panel { width: 380px; min-width: 380px; height: 100%; display: flex; flex-direction: column; background: #f8f9fa; border-right: 1px solid #dee2e6; }
+#panel-header { padding: 16px 16px 12px; border-bottom: 1px solid #dee2e6; background: #fff; }
+#panel-header h1 { font-size: 18px; font-weight: 700; color: #0d6efd; letter-spacing: -0.3px; }
+#panel-header p { font-size: 12px; color: #6c757d; margin-top: 4px; }
+#layer-toggles { margin-top: 6px; font-size: 12px; display: flex; gap: 12px; }
+#layer-toggles label { display: flex; align-items: center; gap: 4px; cursor: pointer; color: #495057; }
+#layer-toggles input { width: 14px; height: 14px; cursor: pointer; }
+#waypoint-section { flex: 1; display: flex; flex-direction: column; min-height: 0; border-top: 1px solid #dee2e6; }
+#waypoint-header { padding: 12px 16px 8px; font-size: 13px; font-weight: 600; color: #495057; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+#waypoint-count { font-weight: 400; color: #6c757d; font-size: 12px; }
+#waypoint-list { flex: 1; overflow-y: auto; padding: 0 16px; }
+#waypoint-list table { width: 100%; border-collapse: collapse; font-size: 12px; }
+#waypoint-list th { text-align: left; padding: 4px 6px; font-weight: 600; color: #6c757d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid #dee2e6; position: sticky; top: 0; background: #f8f9fa; }
+#waypoint-list td { padding: 6px; border-bottom: 1px solid #e9ecef; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#waypoint-list td:first-child { width: 28px; text-align: center; color: #6c757d; font-weight: 600; }
+#waypoint-list .wp-remove { background: none; border: none; color: #dc3545; cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1; opacity: 0.5; }
+#waypoint-list .wp-remove:hover { opacity: 1; }
+#waypoint-list tr:hover td { background: #f1f3f5; }
+#total-row { padding: 8px 16px; font-size: 13px; font-weight: 600; border-top: 1px solid #dee2e6; background: #fff; display: flex; justify-content: space-between; flex-shrink: 0; }
+#total-row .total-label { color: #495057; }
+#total-row .total-value { color: #0d6efd; }
+#actions { padding: 12px 16px; display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px solid #dee2e6; background: #fff; flex-shrink: 0; }
+#actions button { padding: 7px 14px; font-size: 12px; font-weight: 500; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; background: #fff; color: #495057; }
+#actions button:hover { background: #f1f3f5; }
+#actions .btn-danger { color: #dc3545; border-color: #dc3545; }
+#actions .btn-danger:hover { background: #dc3545; color: #fff; }
+#actions .btn-primary { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+#actions .btn-primary:hover { background: #0b5ed7; }
+
+.wp-marker { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; background: #0d6efd; color: #fff; border-radius: 50%; font-size: 11px; font-weight: 700; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+#waypoint-list .num { font-weight: 600; color: #0d6efd; }
+#waypoint-list .coord { font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace; color: #495057; }
+#waypoint-list .dist, #waypoint-list .brg { font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace; color: #6c757d; }
+#empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #adb5bd; font-size: 13px; text-align: center; padding: 40px; }
+#empty-state svg { margin-bottom: 12px; opacity: 0.4; }
+#wind-section { border-top: 1px solid #dee2e6; background: #fff; flex-shrink: 0; }
+#wind-header { padding: 10px 16px; display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+#wind-header input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+#wind-header label { font-size: 13px; font-weight: 600; color: #495057; cursor: pointer; }
+#wind-body { padding: 0 16px 12px; display: none; }
+#wind-body.open { display: block; }
+#wind-body .wr { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+#wind-body .wr label { font-size: 11px; font-weight: 600; color: #6c757d; min-width: 70px; }
+#wind-body .wr input[type="datetime-local"] { flex: 1; font-size: 12px; padding: 4px 6px; border: 1px solid #dee2e6; border-radius: 4px; }
+#wind-body .wr input[type="number"] { width: 64px; font-size: 12px; padding: 4px 6px; border: 1px solid #dee2e6; border-radius: 4px; }
+#wind-body .wr input[type="range"] { flex: 1; }
+#wind-body .wr .slider-label { font-size: 11px; color: #495057; font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace; min-width: 80px; text-align: right; }
+#wind-note { font-size: 11px; color: #6c757d; margin-top: 8px; line-height: 1.4; display: none; }
+#wind-note.show { display: block; }
+#var-section { border-top: 1px solid #dee2e6; background: #fff; flex-shrink: 0; padding: 8px 16px; }
+#var-section .vr { display: flex; align-items: center; gap: 8px; }
+#var-section .vr label { font-size: 11px; font-weight: 600; color: #6c757d; min-width: 70px; }
+#var-section .vr input[type="number"] { width: 60px; font-size: 12px; padding: 4px 6px; border: 1px solid #dee2e6; border-radius: 4px; }
+#var-section .vr select { font-size: 12px; padding: 4px 6px; border: 1px solid #dee2e6; border-radius: 4px; background: #fff; cursor: pointer; }
+#var-section .vr .var-desc { font-size: 11px; color: #6c757d; }
+#actions .btn-measure { background: #fff; color: #495057; }
+#actions .btn-measure.active { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+#cursor-coord { position: absolute; bottom: 8px; right: 8px; z-index: 1000; background: #fff; padding: 4px 8px; border-radius: 4px; font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace; font-size: 12px; color: #495057; pointer-events: none; display: none; box-shadow: 0 1px 3px rgba(0,0,0,0.15); border: 1px solid #dee2e6; }
+.measure-label { background: #fff !important; border: 1px solid #dc3545 !important; border-radius: 4px !important; color: #dc3545 !important; font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace !important; font-size: 12px !important; font-weight: 600 !important; box-shadow: 0 1px 4px rgba(0,0,0,0.15) !important; padding: 2px 8px !important; white-space: nowrap !important; }
+.measure-label::before { display: none !important; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <div id="panel-header">
+    <h1>Chart Plotter</h1>
+    <div id="layer-toggles">
+      <label><input type="checkbox" id="toggle-marine" checked onchange="toggleMarine()"> Marine</label>
+    </div>
+  </div>
+  <div id="actions">
+    <button class="btn-danger" onclick="clearAll()">Clear All</button>
+    <button onclick="exportGPX()">Export GPX</button>
+    <button onclick="exportCSV()">Export CSV</button>
+    <button id="btn-measure" class="btn-measure" onclick="toggleMeasure()">Measure</button>
+    <button onclick="document.getElementById('csv-file').click()">Import CSV</button>
+    <input type="file" id="csv-file" accept=".csv,.txt" style="display:none" onchange="importCSV(this)">
+  </div>
+  <div id="wind-section">
+    <div id="wind-header">
+      <input type="checkbox" id="wind-toggle" onchange="toggleWind()">
+      <label for="wind-toggle">Wind overlay</label>
+    </div>
+    <div id="wind-body">
+      <div class="wr">
+        <label for="departure-time">Departure</label>
+        <input type="datetime-local" id="departure-time" onchange="onDepartureChange()">
+      </div>
+      <div class="wr">
+        <label for="cruising-speed">Speed (kn)</label>
+        <input type="number" id="cruising-speed" value="6" min="1" max="50" step="0.1" onchange="onSpeedChange()">
+      </div>
+      <div class="wr">
+        <label for="time-slider">Hour</label>
+        <input type="range" id="time-slider" min="0" max="0" value="0" oninput="onSliderChange()">
+        <span class="slider-label" id="slider-label">—</span>
+      </div>
+      <div class="wr" id="wind-mode-row">
+        <label>Mode</label>
+        <label style="font-weight:400;min-width:auto;font-size:11px"><input type="radio" name="wind-mode" value="route" checked onchange="onWindModeChange()"> Route time</label>
+        <label style="font-weight:400;min-width:auto;font-size:11px"><input type="radio" name="wind-mode" value="fixed" onchange="onWindModeChange()"> Fixed hour</label>
+      </div>
+      <div id="wind-note"></div>
+    </div>
+  </div>
+  <div id="var-section">
+    <div class="vr">
+      <label>Variation</label>
+      <input type="number" id="var-deg" value="0" min="0" max="30" step="0.1" onchange="onVarChange()">
+      <select id="var-dir" onchange="onVarChange()">
+        <option value="W">W</option>
+        <option value="E">E</option>
+      </select>
+      <span class="var-desc">(magnetic variation)</span>
+    </div>
+  </div>
+  <div id="waypoint-section">
+    <div id="waypoint-header">
+      <span>Waypoints</span>
+      <span id="waypoint-count">0</span>
+    </div>
+    <div id="waypoint-list">
+      <div id="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <div>No waypoints yet</div>
+        <div style="margin-top:4px;font-size:12px;">Click on the map to start plotting your route.</div>
+      </div>
+    </div>
+  </div>
+  <div id="total-row">
+    <span class="total-label">Total distance</span>
+    <span class="total-value">—</span>
+  </div>
+</div>
+<div id="map" style="position:relative">
+  <div id="cursor-coord"></div>
+</div>
+
+<script>
+const R = 3440.065;
+
+function toRad(d) { return d * Math.PI / 180; }
+
+function distanceNm(lat1, lon1, lat2, lon2) {
+  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function bearing(lat1, lon1, lat2, lon2) {
+  const dLon = toRad(lon2 - lon1);
+  const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+  const x = Math.cos(toRad(lat1))*Math.sin(toRad(lat2)) - Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(dLon);
+  return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
+}
+
+function roundCoord(v) { return Math.round(v * 1e5) / 1e5; }
+
+const waypoints = [];
+let segmentPolylines = [];
+let map = null;
+let seamarkLayer = null;
+
+function createNumberedIcon(num) {
+  return L.divIcon({
+    className: '',
+    html: '<div class="wp-marker">' + num + '</div>',
+    iconSize: [26, 26],
+    iconAnchor: [13, 13]
+  });
+}
+
+function initMap() {
+  map = L.map('map', {
+    center: [50.3, -5.0],
+    zoom: 10
+  });
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &amp; <a href="https://openseamap.org">OpenSeaMap</a>',
+    referrerPolicy: 'unsafe-url'
+  }).addTo(map);
+
+  seamarkLayer = L.tileLayer('https://t1.openseamap.org/seamark/{z}/{x}/{y}.png', {
+    maxZoom: 18
+  }).addTo(map);
+
+  map.on('click', function(e) {
+    if (measureEnabled) { doMeasureClick(e.latlng); return; }
+    addWaypoint(roundCoord(e.latlng.lat), roundCoord(e.latlng.lng));
+  });
+  map.on('mousemove', function(e) {
+    updateCursorCoord(e.latlng);
+  });
+}
+
+function addWaypoint(lat, lon) {
+  const idx = waypoints.length;
+  const icon = createNumberedIcon(idx + 1);
+  const marker = L.marker([lat, lon], { draggable: true, icon: icon }).addTo(map);
+
+  const wp = { lat: lat, lon: lon, marker: marker };
+  waypoints.push(wp);
+
+  marker.on('drag', function() {
+    var ll = marker.getLatLng();
+    wp.lat = roundCoord(ll.lat);
+    wp.lon = roundCoord(ll.lng);
+    updatePolyline();
+  });
+
+  marker.on('dragend', function() {
+    updateRoute();
+  });
+
+  updateRoute();
+}
+
+function removeWaypoint(index) {
+  const wp = waypoints[index];
+  map.removeLayer(wp.marker);
+  waypoints.splice(index, 1);
+  renumberMarkers();
+  updateRoute();
+}
+
+function insertWaypointAtIndex(lat, lon, idx) {
+  var icon = createNumberedIcon(waypoints.length + 1);
+  var marker = L.marker([lat, lon], { draggable: true, icon: icon }).addTo(map);
+  var wp = { lat: lat, lon: lon, marker: marker };
+  waypoints.splice(idx, 0, wp);
+  marker.on('drag', function() {
+    var ll = marker.getLatLng();
+    wp.lat = roundCoord(ll.lat);
+    wp.lon = roundCoord(ll.lng);
+    updatePolyline();
+  });
+  marker.on('dragend', function() { updateRoute(); });
+  renumberMarkers();
+  updateRoute();
+}
+
+function clearAll() {
+  for (var i = 0; i < waypoints.length; i++) {
+    map.removeLayer(waypoints[i].marker);
+  }
+  waypoints.length = 0;
+  clearSegments();
+  clearMeasure();
+  if (windEnabled) {
+    windCache = null;
+    windFetching = false;
+  }
+  clearWindArrows();
+  updateRoute();
+}
+
+function renumberMarkers() {
+  for (var i = 0; i < waypoints.length; i++) {
+    waypoints[i].marker.setIcon(createNumberedIcon(i + 1));
+  }
+}
+
+function clearSegments() {
+  for (var i = 0; i < segmentPolylines.length; i++) {
+    map.removeLayer(segmentPolylines[i]);
+  }
+  segmentPolylines = [];
+}
+
+function updatePolyline() {
+  clearSegments();
+  if (waypoints.length < 2) return;
+  for (var i = 0; i < waypoints.length - 1; i++) {
+    var p1 = waypoints[i], p2 = waypoints[i + 1];
+    (function(idx) {
+      var seg = L.polyline([[p1.lat, p1.lon], [p2.lat, p2.lon]], {
+        color: '#dc3545', weight: 3, opacity: 0.8
+      }).addTo(map);
+      var d = distanceNm(p1.lat, p1.lon, p2.lat, p2.lon);
+      var b = bearing(p1.lat, p1.lon, p2.lat, p2.lon);
+      var legInfo = d.toFixed(1) + ' NM @ ' + Math.round(b) + '°T';
+      seg.bindTooltip(legInfo, { sticky: true, offset: [0, -8] });
+      seg.on('click', function(e) {
+        if (measureEnabled) { return; }
+        L.DomEvent.stopPropagation(e);
+        insertWaypointAtIndex(roundCoord(e.latlng.lat), roundCoord(e.latlng.lng), idx + 1);
+      });
+      segmentPolylines.push(seg);
+    })(i);
+  }
+}
+
+function updateRoute() {
+  updatePolyline();
+  renderWaypointList();
+  if (windEnabled) updateWindOverlay();
+}
+
+function renderWaypointList() {
+  var container = document.getElementById('waypoint-list');
+  var countEl = document.getElementById('waypoint-count');
+
+  if (waypoints.length === 0) {
+    container.innerHTML =
+      '<div id="empty-state">' +
+      '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' +
+      '<div>No waypoints yet</div>' +
+      '<div style="margin-top:4px;font-size:12px;">Click on the map to start plotting your route.</div>' +
+      '</div>';
+    countEl.textContent = '0';
+    document.querySelector('#total-row .total-value').textContent = '—';
+    return;
+  }
+
+  countEl.textContent = waypoints.length;
+
+  var html = '<table><thead><tr><th>#</th><th>Lat</th><th>Lon</th><th>Dist</th><th>Brg</th><th></th></tr></thead><tbody>';
+  var total = 0;
+
+  for (var i = 0; i < waypoints.length; i++) {
+    var wp = waypoints[i];
+    var segDist = '';
+    var segBrg = '';
+    if (i > 0) {
+      var prev = waypoints[i - 1];
+      var d = distanceNm(prev.lat, prev.lon, wp.lat, wp.lon);
+      var b = bearing(prev.lat, prev.lon, wp.lat, wp.lon);
+      segDist = d.toFixed(1);
+      var brgStr = Math.round(b).toString().padStart(3, '0') + '°T';
+      var m = magBearing(b);
+      if (m !== null) brgStr += ' / ' + Math.round(m).toString().padStart(3, '0') + '°M';
+      segBrg = brgStr;
+      total += d;
+    }
+    html += '<tr>' +
+      '<td class="num">' + (i + 1) + '</td>' +
+      '<td class="coord">' + wp.lat.toFixed(5) + '</td>' +
+      '<td class="coord">' + wp.lon.toFixed(5) + '</td>' +
+      '<td class="dist">' + (segDist ? segDist + ' NM' : '—') + '</td>' +
+      '<td class="brg">' + (segBrg || '—') + '</td>' +
+      '<td><button class="wp-remove" onclick="removeWaypoint(' + i + ')" title="Remove waypoint">✕</button></td>' +
+      '</tr>';
+  }
+  html += '</tbody></table>';
+
+  container.innerHTML = html;
+  document.querySelector('#total-row .total-value').textContent = total.toFixed(1) + ' NM';
+}
+
+function download(content, filename, mimeType) {
+  var blob = new Blob([content], { type: mimeType + ';charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportGPX() {
+  if (waypoints.length < 2) { alert('Add at least 2 waypoints to export a route.'); return; }
+  var xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  xml += '<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">\n';
+  xml += '  <trk>\n';
+  xml += '    <name>Route</name>\n';
+  xml += '    <trkseg>\n';
+  for (var i = 0; i < waypoints.length; i++) {
+    xml += '      <trkpt lat="' + waypoints[i].lat.toFixed(5) + '" lon="' + waypoints[i].lon.toFixed(5) + '"/>\n';
+  }
+  xml += '    </trkseg>\n';
+  xml += '  </trk>\n';
+  xml += '</gpx>\n';
+  download(xml, 'route.gpx', 'application/gpx+xml');
+}
+
+function exportCSV() {
+  if (waypoints.length === 0) { alert('Add at least 1 waypoint to export.'); return; }
+  var csv = '';
+  for (var i = 0; i < waypoints.length; i++) {
+    csv += waypoints[i].lat.toFixed(5) + ', ' + waypoints[i].lon.toFixed(5) + '\n';
+  }
+  download(csv, 'route.csv', 'text/csv');
+}
+
+function importCSV(input) {
+  if (!input || !input.files || !input.files[0]) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var text = e.target.result.trim();
+    if (!text) { alert('File is empty.'); return; }
+    parseAndPlotCSV(text);
+    input.value = '';
+  };
+  reader.readAsText(input.files[0]);
+}
+
+function parseAndPlotCSV(text) {
+  var lines = text.split('\n');
+  var newWps = [];
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    if (!line) continue;
+    var parts = line.split(',');
+    if (parts.length < 2) { alert('Invalid format on line ' + (i + 1) + ': expected "lat, lon"'); return; }
+    var lat = parseFloat(parts[0].trim());
+    var lon = parseFloat(parts[1].trim());
+    if (isNaN(lat) || isNaN(lon)) { alert('Invalid number on line ' + (i + 1)); return; }
+    if (lat < -90 || lat > 90) { alert('Latitude out of range on line ' + (i + 1)); return; }
+    if (lon < -180 || lon > 180) { alert('Longitude out of range on line ' + (i + 1)); return; }
+    newWps.push({ lat: roundCoord(lat), lon: roundCoord(lon) });
+  }
+  if (newWps.length < 2) { alert('Need at least 2 waypoints for a route.'); return; }
+
+  clearAll();
+  for (var j = 0; j < newWps.length; j++) {
+    addWaypoint(newWps[j].lat, newWps[j].lon);
+  }
+  map.fitBounds(waypoints.map(function(w) { return [w.lat, w.lon]; }), { padding: [50, 50] });
+  if (windEnabled) {
+    windCache = null;
+    windFetching = false;
+    fetchWindData();
+  }
+}
+
+var windEnabled = false;
+var departureTime = null;
+var cruisingSpeed = 6;
+var windCache = null;
+var windGridLats = null;
+var windGridLons = null;
+var windForecastHours = [];
+var windSliderIdx = 0;
+var waypointArrows = [];
+var gridArrows = [];
+var windFetching = false;
+var windMode = 'route';
+
+function destPoint(lat, lon, distDeg, bearingDeg) {
+  var brng = toRad(bearingDeg);
+  var dlat = distDeg * Math.cos(brng);
+  var dlon = distDeg * Math.sin(brng) / Math.cos(toRad(lat));
+  return { lat: lat + dlat, lon: lon + dlon };
+}
+
+function windUV(speed, dirDeg) {
+  var r = toRad(dirDeg);
+  return { u: -speed * Math.sin(r), v: -speed * Math.cos(r) };
+}
+
+function windFromUV(u, v) {
+  return { speed: Math.sqrt(u*u + v*v), direction: ((270 - Math.atan2(v, u) * 180 / Math.PI) + 360) % 360 };
+}
+
+function buildWindGrid() {
+  var latMin, latMax, lonMin, lonMax;
+  if (waypoints.length > 1) {
+    latMin = Infinity; latMax = -Infinity; lonMin = Infinity; lonMax = -Infinity;
+    for (var wi = 0; wi < waypoints.length; wi++) {
+      var w = waypoints[wi];
+      if (w.lat < latMin) latMin = w.lat;
+      if (w.lat > latMax) latMax = w.lat;
+      if (w.lon < lonMin) lonMin = w.lon;
+      if (w.lon > lonMax) lonMax = w.lon;
+    }
+    latMin -= 0.5; latMax += 0.5;
+    lonMin -= 0.5; lonMax += 0.5;
+  } else {
+    var c = map.getCenter();
+    latMin = c.lat - 1.5; latMax = c.lat + 1.5;
+    lonMin = c.lng - 1.5; lonMax = c.lng + 1.5;
+  }
+  var lats = [], lons = [];
+  for (var i = 0; i < 7; i++) lats.push(+(latMin + (latMax - latMin) * i / 6).toFixed(4));
+  for (var j = 0; j < 7; j++) lons.push(+(lonMin + (lonMax - lonMin) * j / 6).toFixed(4));
+  var points = [];
+  for (var i = 0; i < 7; i++) {
+    for (var j = 0; j < 7; j++) points.push({ lat: lats[i], lon: lons[j] });
+  }
+  return { lats: lats, lons: lons, points: points };
+}
+
+function getWindDateRange() {
+  var ref = departureTime ? new Date(departureTime) : new Date();
+  var now = new Date();
+  var maxEnd = new Date(now);
+  maxEnd.setDate(maxEnd.getDate() + 15);
+  if (ref > maxEnd || ref < new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)) {
+    return null;
+  }
+  var start = new Date(ref);
+  start.setHours(0, 0, 0, 0);
+  var end = new Date(start);
+  end.setDate(end.getDate() + 2);
+  if (end > maxEnd) end = maxEnd;
+  return {
+    startStr: start.toISOString().slice(0, 10),
+    endStr: end.toISOString().slice(0, 10),
+    ref: ref
+  };
+}
+
+function fetchWindData() {
+  if (!windEnabled || windFetching) return;
+  windFetching = true;
+  var grid = buildWindGrid();
+  windGridLats = grid.lats;
+  windGridLons = grid.lons;
+  var dr = getWindDateRange();
+  if (!dr) {
+    windFetching = false;
+    showWindNote('Departure time is outside the 16-day forecast window');
+    return;
+  }
+  var latStr = grid.points.map(function(p) { return p.lat.toFixed(4); }).join(',');
+  var lonStr = grid.points.map(function(p) { return p.lon.toFixed(4); }).join(',');
+  var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + latStr + '&longitude=' + lonStr + '&hourly=wind_speed_10m,wind_direction_10m&start_date=' + dr.startStr + '&end_date=' + dr.endStr + '&wind_speed_unit=kn&timezone=UTC';
+  fetch(url).then(function(resp) {
+    if (!resp.ok) return resp.text().then(function(body) { throw new Error('HTTP ' + resp.status + ': ' + body.slice(0, 200)); });
+    return resp.json();
+  }).then(function(data) {
+    if (!Array.isArray(data) || !data[0] || !data[0].hourly) {
+      throw new Error('unexpected API response: ' + JSON.stringify(data).slice(0, 300));
+    }
+    windCache = data;
+    windForecastHours = data[0].hourly.time;
+    windFetching = false;
+    var slider = document.getElementById('time-slider');
+    slider.max = Math.max(0, windForecastHours.length - 1);
+    slider.value = 0;
+    windSliderIdx = 0;
+    updateSliderLabel();
+    renderWindOverlay();
+    hideWindNote();
+  }).catch(function(e) {
+    windCache = null;
+    windFetching = false;
+    showWindNote('Wind data unavailable: ' + e.message);
+  });
+}
+
+function interpolateWind(lat, lon, timeIdx) {
+  if (!windCache || !windGridLats || !windGridLons) return null;
+  var li = 0, lj = 0;
+  while (li < windGridLats.length - 2 && windGridLats[li + 1] < lat) li++;
+  while (lj < windGridLons.length - 2 && windGridLons[lj + 1] < lon) lj++;
+  var lat0 = windGridLats[li], lat1 = windGridLats[li + 1];
+  var lon0 = windGridLons[lj], lon1 = windGridLons[lj + 1];
+  function getUV(gi, gj, ti) {
+    var idx = gi * 7 + gj;
+    var spd = windCache[idx].hourly.wind_speed_10m[ti];
+    var dir = windCache[idx].hourly.wind_direction_10m[ti];
+    if (spd == null || dir == null) return null;
+    return windUV(spd, dir);
+  }
+  function bilinearVal(lat, lon, lat0, lat1, lon0, lon1, ti) {
+    var f00 = getUV(li, lj, ti);
+    var f10 = getUV(li, lj + 1, ti);
+    var f01 = getUV(li + 1, lj, ti);
+    var f11 = getUV(li + 1, lj + 1, ti);
+    if (!f00 || !f10 || !f01 || !f11) return null;
+    var lf = lat1 === lat0 ? 0 : (lat - lat0) / (lat1 - lat0);
+    var lgf = lon1 === lon0 ? 0 : (lon - lon0) / (lon1 - lon0);
+    var u0 = f00.u * (1 - lgf) + f10.u * lgf;
+    var u1 = f01.u * (1 - lgf) + f11.u * lgf;
+    var v0 = f00.v * (1 - lgf) + f10.v * lgf;
+    var v1 = f01.v * (1 - lgf) + f11.v * lgf;
+    return { u: u0 * (1 - lf) + u1 * lf, v: v0 * (1 - lf) + v1 * lf };
+  }
+  var t0 = Math.floor(timeIdx);
+  var t1 = Math.ceil(timeIdx);
+  if (t0 === t1 || t1 >= windForecastHours.length) {
+    var uv = bilinearVal(lat, lon, lat0, lat1, lon0, lon1, t0);
+    return uv ? windFromUV(uv.u, uv.v) : null;
+  }
+  var frac = timeIdx - t0;
+  var uv0 = bilinearVal(lat, lon, lat0, lat1, lon0, lon1, t0);
+  var uv1 = bilinearVal(lat, lon, lat0, lat1, lon0, lon1, t1);
+  if (!uv0 || !uv1) return null;
+  var speed = uv0.speed + (uv1.speed - uv0.speed) * frac;
+  var d0 = uv0.direction, d1 = uv1.direction;
+  var diff = ((d1 - d0 + 540) % 360) - 180;
+  var direction = ((d0 + diff * frac) + 360) % 360;
+  return { speed: speed, direction: direction };
+}
+
+function getWaypointArrivalTimes() {
+  if (waypoints.length === 0 || !departureTime) return [];
+  var times = [];
+  var elapsedH = 0;
+  times.push(new Date(departureTime));
+  for (var i = 1; i < waypoints.length; i++) {
+    var d = distanceNm(waypoints[i-1].lat, waypoints[i-1].lon, waypoints[i].lat, waypoints[i].lon);
+    elapsedH += d / cruisingSpeed;
+    var t = new Date(departureTime.getTime() + elapsedH * 3600000);
+    times.push(t);
+  }
+  return times;
+}
+
+function findForecastIdx(date) {
+  if (windForecastHours.length === 0) return 0;
+  var ms = date.getTime();
+  var best = 0;
+  var bestDiff = Infinity;
+  for (var i = 0; i < windForecastHours.length; i++) {
+    var t = new Date(windForecastHours[i] + 'Z').getTime();
+    var diff = Math.abs(t - ms);
+    if (diff < bestDiff) { bestDiff = diff; best = i; }
+  }
+  return best;
+}
+
+function drawArrow(lat, lon, speed, dir, isWaypoint, tooltipText) {
+  var downwind = (dir + 180) % 360;
+  var base = destPoint(lat, lon, 0.008, dir);
+  var tip = destPoint(base.lat, base.lon, 0.01, downwind);
+  var left = destPoint(tip.lat, tip.lon, 0.005, (dir + 30) % 360);
+  var right = destPoint(tip.lat, tip.lon, 0.005, ((dir - 30) + 360) % 360);
+  var style = {
+    color: '#6b21a8',
+    weight: isWaypoint ? 1.5 : 1.0,
+    opacity: isWaypoint ? 0.8 : 0.5
+  };
+  var shaft = L.polyline([[base.lat, base.lon], [tip.lat, tip.lon]], style).addTo(map);
+  var head = L.polyline([[tip.lat, tip.lon], [left.lat, left.lon], [tip.lat, tip.lon], [right.lat, right.lon]], style).addTo(map);
+  if (tooltipText) shaft.bindTooltip(tooltipText);
+  return [shaft, head];
+}
+
+function clearWindArrows() {
+  for (var i = 0; i < waypointArrows.length; i++) {
+    map.removeLayer(waypointArrows[i]);
+  }
+  for (var i = 0; i < gridArrows.length; i++) {
+    map.removeLayer(gridArrows[i]);
+  }
+  waypointArrows = [];
+  gridArrows = [];
+}
+
+function renderWindOverlay() {
+  clearWindArrows();
+  if (!windEnabled || !windCache) return;
+  var hourIdx = windSliderIdx;
+  if (hourIdx >= windForecastHours.length) hourIdx = windForecastHours.length - 1;
+  for (var gi = 0; gi < windGridLats.length; gi++) {
+    for (var gj = 0; gj < windGridLons.length; gj++) {
+      var w = interpolateWind(windGridLats[gi], windGridLons[gj], hourIdx);
+      if (w && w.speed > 0) {
+        var arr = drawArrow(windGridLats[gi], windGridLons[gj], w.speed, w.direction, false, Math.round(w.speed) + ' kn from ' + Math.round(w.direction) + '°');
+        gridArrows.push(arr[0], arr[1]);
+      }
+    }
+  }
+  if (waypoints.length > 0 && (windMode === 'fixed' || departureTime)) {
+    var times = null;
+    if (windMode === 'route') times = getWaypointArrivalTimes();
+    for (var wi = 0; wi < waypoints.length; wi++) {
+      var fi, timeStr;
+      if (windMode === 'fixed') {
+        fi = windSliderIdx;
+        timeStr = (windForecastHours[fi] || '').slice(11, 16) + 'Z';
+      } else {
+        fi = findForecastIdx(times[wi]);
+        timeStr = times[wi].toISOString().slice(11, 16) + 'Z';
+      }
+      var w = interpolateWind(waypoints[wi].lat, waypoints[wi].lon, fi);
+      if (w && w.speed > 0) {
+        var arr = drawArrow(waypoints[wi].lat, waypoints[wi].lon, w.speed, w.direction, true, Math.round(w.speed) + ' kn from ' + Math.round(w.direction) + '° at ' + timeStr);
+        waypointArrows.push(arr[0], arr[1]);
+      }
+    }
+  }
+}
+
+function updateWindOverlay() {
+  if (!windEnabled) return;
+  if (!windCache) { fetchWindData(); return; }
+  renderWindOverlay();
+  if (windMode === 'route' && (waypoints.length < 2 || !departureTime)) {
+    showWindNote('Route-dependent wind not shown — plot a route and set departure time');
+  } else {
+    hideWindNote();
+  }
+}
+
+function showWindNote(msg) {
+  var el = document.getElementById('wind-note');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+function hideWindNote() {
+  document.getElementById('wind-note').classList.remove('show');
+}
+
+function toggleMarine() {
+  var cb = document.getElementById('toggle-marine');
+  if (cb.checked) {
+    if (!map.hasLayer(seamarkLayer)) seamarkLayer.addTo(map);
+  } else {
+    if (map.hasLayer(seamarkLayer)) map.removeLayer(seamarkLayer);
+  }
+}
+
+function toggleWind() {
+  var cb = document.getElementById('wind-toggle');
+  var body = document.getElementById('wind-body');
+  windEnabled = cb.checked;
+  if (windEnabled) {
+    body.classList.add('open');
+    var dtInput = document.getElementById('departure-time');
+    if (!dtInput.value) {
+      var now = new Date();
+      var pad = function(n) { return String(n).padStart(2, '0'); };
+      dtInput.value = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+      departureTime = new Date(now);
+    }
+    fetchWindData();
+  } else {
+    body.classList.remove('open');
+    clearWindArrows();
+    hideWindNote();
+  }
+}
+
+function onDepartureChange() {
+  var val = document.getElementById('departure-time').value;
+  departureTime = val ? new Date(val + ':00') : null;
+  if (windEnabled && windCache) renderWindOverlay();
+}
+
+function onSpeedChange() {
+  var val = parseFloat(document.getElementById('cruising-speed').value);
+  if (!isNaN(val) && val > 0) cruisingSpeed = val;
+  if (windEnabled && windCache) renderWindOverlay();
+}
+
+function onSliderChange() {
+  windSliderIdx = parseInt(document.getElementById('time-slider').value);
+  updateSliderLabel();
+  if (windEnabled && windCache) renderWindOverlay();
+}
+
+function onWindModeChange() {
+  var r = document.querySelector('input[name="wind-mode"][value="route"]');
+  windMode = r && r.checked ? 'route' : 'fixed';
+  if (windEnabled && windCache) renderWindOverlay();
+}
+
+var measureEnabled = false;
+var measurePoints = [];
+var measureLine = null;
+var measureMarkers = [];
+var measureLabel = null;
+var measureArrow = [];
+
+function toggleMeasure() {
+  measureEnabled = !measureEnabled;
+  var btn = document.getElementById('btn-measure');
+  if (measureEnabled) {
+    btn.classList.add('active');
+    btn.textContent = 'Measuring…';
+  } else {
+    btn.classList.remove('active');
+    btn.textContent = 'Measure';
+    clearMeasure();
+  }
+}
+
+function clearMeasure() {
+  for (var i = 0; i < measureMarkers.length; i++) map.removeLayer(measureMarkers[i]);
+  measureMarkers = [];
+  measurePoints = [];
+  if (measureLine) { map.removeLayer(measureLine); measureLine = null; }
+  if (measureLabel) { map.removeLayer(measureLabel); measureLabel = null; }
+  clearMeasureArrow();
+}
+
+function clearMeasureArrow() {
+  for (var i = 0; i < measureArrow.length; i++) map.removeLayer(measureArrow[i]);
+  measureArrow = [];
+}
+
+function makeMeasureMarker(lat, lon, label) {
+  var marker = L.marker([lat, lon], {
+    draggable: true,
+    icon: L.divIcon({
+      className: '',
+      html: '<div style="width:14px;height:14px;background:#dc3545;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.4);cursor:grab;"></div>',
+      iconSize: [14, 14],
+      iconAnchor: [7, 7]
+    })
+  }).addTo(map);
+  marker.bindTooltip(label + ': ' + lat.toFixed(5) + ', ' + lon.toFixed(5), { sticky: true });
+  return marker;
+}
+
+function doMeasureClick(latlng) {
+  if (measurePoints.length >= 2) clearMeasure();
+  var ll = { lat: roundCoord(latlng.lat), lon: roundCoord(latlng.lng) };
+  measurePoints.push(ll);
+  var idx = measureMarkers.length;
+  var marker = makeMeasureMarker(ll.lat, ll.lon, idx === 0 ? 'A' : 'B');
+  marker.on('drag', function() { onMeasureDrag(idx); });
+  marker.on('dragend', function() { onMeasureDragEnd(idx); });
+  measureMarkers.push(marker);
+  if (measurePoints.length === 2) updateMeasureLine();
+}
+
+function onMeasureDrag(idx) {
+  var ll = measureMarkers[idx].getLatLng();
+  measurePoints[idx] = { lat: roundCoord(ll.lat), lon: roundCoord(ll.lng) };
+  measureMarkers[idx].setTooltipContent((idx === 0 ? 'A' : 'B') + ': ' + measurePoints[idx].lat.toFixed(5) + ', ' + measurePoints[idx].lon.toFixed(5));
+  if (measurePoints.length === 2) {
+    measureLine.setLatLngs([[measurePoints[0].lat, measurePoints[0].lon], [measurePoints[1].lat, measurePoints[1].lon]]);
+    updateMeasureArrow();
+    updateMeasureLabel();
+  }
+}
+
+function onMeasureDragEnd(idx) {
+  if (measurePoints.length === 2) updateMeasureLabel();
+}
+
+function updateMeasureLine() {
+  if (measureLine) map.removeLayer(measureLine);
+  measureLine = L.polyline([
+    [measurePoints[0].lat, measurePoints[0].lon],
+    [measurePoints[1].lat, measurePoints[1].lon]
+  ], { color: '#dc3545', weight: 2, opacity: 0.6, dashArray: '6,4' }).addTo(map);
+  updateMeasureArrow();
+  updateMeasureLabel();
+}
+
+function updateMeasureLabel() {
+  var d = distanceNm(measurePoints[0].lat, measurePoints[0].lon, measurePoints[1].lat, measurePoints[1].lon);
+  var b = bearing(measurePoints[0].lat, measurePoints[0].lon, measurePoints[1].lat, measurePoints[1].lon);
+  var text = d.toFixed(2) + ' NM @ ' + Math.round(b) + '°T';
+  var midLat = (measurePoints[0].lat + measurePoints[1].lat) / 2;
+  var midLon = (measurePoints[0].lon + measurePoints[1].lon) / 2;
+  if (measureLabel) { map.removeLayer(measureLabel); }
+  measureLabel = L.tooltip({
+    permanent: true,
+    direction: 'top',
+    offset: [0, -4],
+    className: 'measure-label'
+  }).setLatLng([midLat, midLon]).setContent(text).addTo(map);
+}
+
+function updateMeasureArrow() {
+  clearMeasureArrow();
+  var midLat = (measurePoints[0].lat + measurePoints[1].lat) / 2;
+  var midLon = (measurePoints[0].lon + measurePoints[1].lon) / 2;
+  var b = bearing(measurePoints[0].lat, measurePoints[0].lon, measurePoints[1].lat, measurePoints[1].lon);
+  var d = distanceNm(measurePoints[0].lat, measurePoints[0].lon, measurePoints[1].lat, measurePoints[1].lon);
+  var approxDeg = d / 60;
+  var arrowSize = Math.min(Math.max(approxDeg * 0.25, 0.0003), 0.003);
+  var base = destPoint(midLat, midLon, arrowSize, (b + 180) % 360);
+  var left = destPoint(base.lat, base.lon, arrowSize * 0.6, (b + 90) % 360);
+  var right = destPoint(base.lat, base.lon, arrowSize * 0.6, (b - 90 + 360) % 360);
+  var style = { color: '#dc3545', weight: 2, opacity: 0.8 };
+  var a1 = L.polyline([[midLat, midLon], [left.lat, left.lon]], style).addTo(map);
+  var a2 = L.polyline([[midLat, midLon], [right.lat, right.lon]], style).addTo(map);
+  measureArrow.push(a1, a2);
+}
+
+var variationDeg = 0;
+var variationDir = 'W';
+
+function onVarChange() {
+  variationDeg = parseFloat(document.getElementById('var-deg').value) || 0;
+  variationDir = document.getElementById('var-dir').value;
+  renderWaypointList();
+}
+
+function magBearing(trueBrg) {
+  if (variationDeg === 0) return null;
+  var offset = variationDir === 'W' ? variationDeg : -variationDeg;
+  return ((trueBrg + offset) + 360) % 360;
+}
+
+var cursorCoordEnabled = true;
+
+function updateCursorCoord(latlng) {
+  var el = document.getElementById('cursor-coord');
+  el.textContent = latlng.lat.toFixed(5) + ', ' + latlng.lng.toFixed(5);
+  el.style.display = 'block';
+}
+
+function updateSliderLabel() {
+  var el = document.getElementById('slider-label');
+  if (windForecastHours.length > 0 && windSliderIdx < windForecastHours.length) {
+    el.textContent = windForecastHours[windSliderIdx].slice(11, 16) + 'Z';
+  } else {
+    el.textContent = '—';
+  }
+}
+
+initMap();
+</script>
+</body>
+</html>
