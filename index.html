@@ -16,6 +16,7 @@ body { display: flex; }
 #panel-header { padding: 16px 16px 12px; border-bottom: 1px solid #dee2e6; background: #fff; }
 #panel-header h1 { font-size: 18px; font-weight: 700; color: #0d6efd; letter-spacing: -0.3px; }
 #panel-header p { font-size: 12px; color: #6c757d; margin-top: 4px; }
+.build-number { display: block; font-size: 10px; color: #adb5bd; font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace; margin-top: 4px; }
 #layer-toggles { margin-top: 6px; font-size: 12px; display: flex; gap: 12px; }
 #layer-toggles label { display: flex; align-items: center; gap: 4px; cursor: pointer; color: #495057; }
 #layer-toggles input { width: 14px; height: 14px; cursor: pointer; }
@@ -132,6 +133,7 @@ body { display: flex; }
       <h1>Chart Plotter</h1>
       <button id="panel-close" onclick="togglePanel()" aria-label="Close panel">✕</button>
     </div>
+    <span class="build-number"><!--BUILD_NUMBER--></span>
     <div id="layer-toggles">
       <label><input type="checkbox" id="toggle-marine" checked onchange="toggleMarine()"> Marine</label>
     </div>
