@@ -697,6 +697,12 @@ function clearWindArrows() {
   gridArrows = [];
 }
 
+function forecastLocalTime(idx) {
+  if (idx < 0 || idx >= windForecastHours.length) return '--:--';
+  var d = new Date(windForecastHours[idx] + 'Z');
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
 function getForecastHour(offsetHours) {
   if (!departureTime || windForecastHours.length === 0) return 0;
   return findForecastIdx(new Date(departureTime.getTime() + offsetHours * 3600000));
@@ -708,7 +714,7 @@ function renderWindOverlay() {
   var offsetH = windSliderIdx;
   var fi = getForecastHour(offsetH);
   if (fi >= windForecastHours.length) fi = windForecastHours.length - 1;
-  var timeStr = (windForecastHours[fi] || '').slice(11, 16) + 'Z';
+  var timeStr = forecastLocalTime(fi);
   for (var gi = 0; gi < windGridLats.length; gi++) {
     for (var gj = 0; gj < windGridLons.length; gj++) {
       var w = interpolateWind(windGridLats[gi], windGridLons[gj], fi);
@@ -954,7 +960,7 @@ function updateSliderLabel() {
   var el = document.getElementById('slider-label');
   if (windForecastHours.length > 0) {
     var fi = getForecastHour(windSliderIdx);
-    var timeStr = (windForecastHours[fi] || '').slice(11, 16) + 'Z';
+    var timeStr = forecastLocalTime(fi);
     el.textContent = '+' + windSliderIdx + 'h (' + timeStr + ')';
   } else {
     el.textContent = '—';
