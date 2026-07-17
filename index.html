@@ -869,6 +869,11 @@ function makeMeasureMarker(lat, lon, label) {
   marker.on('dragstart', function() { measureDragging = true; });
   marker.on('dragend', function() { measureDragging = false; });
   marker.bindTooltip(label + ': ' + lat.toFixed(5) + ', ' + lon.toFixed(5), { sticky: true });
+  if (marker._icon) {
+    L.DomEvent.on(marker._icon, 'touchstart', L.DomEvent.stopPropagation);
+    L.DomEvent.on(marker._icon, 'touchmove', L.DomEvent.stopPropagation);
+    L.DomEvent.on(marker._icon, 'touchend', L.DomEvent.stopPropagation);
+  }
   return marker;
 }
 
