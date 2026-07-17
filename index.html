@@ -540,7 +540,7 @@ function buildWindGrid() {
     latMin = c.lat - 1.5; latMax = c.lat + 1.5;
     lonMin = c.lng - 1.5; lonMax = c.lng + 1.5;
   }
-  var nGrid = 13;
+  var nGrid = 21;
   var lats = [], lons = [];
   for (var i = 0; i < nGrid; i++) lats.push(+(latMin + (latMax - latMin) * i / (nGrid - 1)).toFixed(4));
   for (var j = 0; j < nGrid; j++) lons.push(+(lonMin + (lonMax - lonMin) * j / (nGrid - 1)).toFixed(4));
