@@ -230,9 +230,9 @@ let seamarkLayer = null;
 function createNumberedIcon(num) {
   return L.divIcon({
     className: '',
-    html: '<div class="wp-marker">' + num + '</div>',
-    iconSize: [26, 26],
-    iconAnchor: [13, 13]
+    html: '<div style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;"><div class="wp-marker">' + num + '</div></div>',
+    iconSize: [44, 44],
+    iconAnchor: [22, 22]
   });
 }
 
@@ -265,7 +265,7 @@ function initMap() {
 function addWaypoint(lat, lon) {
   const idx = waypoints.length;
   const icon = createNumberedIcon(idx + 1);
-  const marker = L.marker([lat, lon], { draggable: true, icon: icon }).addTo(map);
+  const marker = L.marker([lat, lon], { draggable: true, icon: icon, bubblingMouseEvents: false }).addTo(map);
 
   const wp = { lat: lat, lon: lon, marker: marker };
   waypoints.push(wp);
@@ -294,7 +294,7 @@ function removeWaypoint(index) {
 
 function insertWaypointAtIndex(lat, lon, idx) {
   var icon = createNumberedIcon(waypoints.length + 1);
-  var marker = L.marker([lat, lon], { draggable: true, icon: icon }).addTo(map);
+  var marker = L.marker([lat, lon], { draggable: true, icon: icon, bubblingMouseEvents: false }).addTo(map);
   var wp = { lat: lat, lon: lon, marker: marker };
   waypoints.splice(idx, 0, wp);
   marker.on('drag', function() {
