@@ -4,6 +4,12 @@
 - Single `index.html` (no build step, no server-side code)
 - Leaflet 1.9.4 (unpkg CDN), OSM tiles + OpenSeaMap seamark layer
 
+## Mobile
+- Panel collapses to a slide-out drawer at ≤768px viewport width
+- Hamburger button (top-left) toggles `#panel.open`
+- Close button (✕) in panel header also toggles
+- Map fills full viewport when panel is closed
+
 ## Serving
 - **Must serve via HTTP** for OSM tile referrer policy — OSM blocks `file://`
 - Use Python: `python -m http.server 8000` → `http://localhost:8000`
@@ -48,9 +54,8 @@
 - API returns array of per-location objects: `data[n].hourly.wind_speed_10m[hour]`
 - 16-day forecast window only — departure times outside this show a note
 - Bilinear spatial interpolation (u/v), linear temporal interpolation
-- Purple arrows: grid arrows (transparent, small) + waypoint arrows (opaque, offset windward, arrival-time tooltip)
-- Route mode: arrival times computed via `distance / cruisingSpeed`
-- Fixed hour mode: slider selects forecast hour
+- Purple arrows: grid arrows (transparent, small) + waypoint arrows (opaque, offset windward, tooltip shows time)
+- Slider represents hours after departure time: `+0h (14:00Z)`, `+6h (20:00Z)`, etc.
 
 ## Export/Import
 - GPX v1.1 (`trkpt lat/lon` at 5dp), CSV (`lat, lon` per line)

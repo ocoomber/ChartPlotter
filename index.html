@@ -70,6 +70,57 @@ body { display: flex; }
 #actions .btn-measure { background: #fff; color: #495057; }
 #actions .btn-measure.active { background: #0d6efd; color: #fff; border-color: #0d6efd; }
 #cursor-coord { position: absolute; bottom: 8px; right: 8px; z-index: 1000; background: #fff; padding: 4px 8px; border-radius: 4px; font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace; font-size: 12px; color: #495057; pointer-events: none; display: none; box-shadow: 0 1px 3px rgba(0,0,0,0.15); border: 1px solid #dee2e6; }
+
+#panel-toggle {
+  display: none;
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 2001;
+  width: 36px;
+  height: 36px;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  color: #495057;
+}
+#panel-toggle:hover { background: #f1f3f5; }
+
+#panel-close {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #6c757d;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+#panel-close:hover { color: #1a1a1a; }
+#panel-header-row { display: flex; justify-content: space-between; align-items: center; }
+
+@media (max-width: 768px) {
+  body { display: block; overflow: hidden; }
+  #map { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+  #panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 85vw;
+    max-width: 380px;
+    height: 100%;
+    z-index: 2000;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.2);
+  }
+  #panel.open { transform: translateX(0); }
+  #panel-toggle { display: flex; }
+  #panel-close { display: inline; }
+}
 .measure-label { background: #fff !important; border: 1px solid #dc3545 !important; border-radius: 4px !important; color: #dc3545 !important; font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace !important; font-size: 12px !important; font-weight: 600 !important; box-shadow: 0 1px 4px rgba(0,0,0,0.15) !important; padding: 2px 8px !important; white-space: nowrap !important; }
 .measure-label::before { display: none !important; }
 </style>
@@ -77,7 +128,10 @@ body { display: flex; }
 <body>
 <div id="panel">
   <div id="panel-header">
-    <h1>Chart Plotter</h1>
+    <div id="panel-header-row">
+      <h1>Chart Plotter</h1>
+      <button id="panel-close" onclick="togglePanel()" aria-label="Close panel">✕</button>
+    </div>
     <div id="layer-toggles">
       <label><input type="checkbox" id="toggle-marine" checked onchange="toggleMarine()"> Marine</label>
     </div>
@@ -108,11 +162,6 @@ body { display: flex; }
         <label for="time-slider">Hour</label>
         <input type="range" id="time-slider" min="0" max="0" value="0" oninput="onSliderChange()">
         <span class="slider-label" id="slider-label">—</span>
-      </div>
-      <div class="wr" id="wind-mode-row">
-        <label>Mode</label>
-        <label style="font-weight:400;min-width:auto;font-size:11px"><input type="radio" name="wind-mode" value="route" checked onchange="onWindModeChange()"> Route time</label>
-        <label style="font-weight:400;min-width:auto;font-size:11px"><input type="radio" name="wind-mode" value="fixed" onchange="onWindModeChange()"> Fixed hour</label>
       </div>
       <div id="wind-note"></div>
     </div>
@@ -146,9 +195,12 @@ body { display: flex; }
     <span class="total-value">—</span>
   </div>
 </div>
-<div id="map" style="position:relative">
-  <div id="cursor-coord"></div>
-</div>
+  <button id="panel-toggle" onclick="togglePanel()" aria-label="Toggle panel">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <div id="map" style="position:relative">
+    <div id="cursor-coord"></div>
+  </div>
 
 <script>
 const R = 3440.065;
@@ -452,7 +504,6 @@ var windSliderIdx = 0;
 var waypointArrows = [];
 var gridArrows = [];
 var windFetching = false;
-var windMode = 'route';
 
 function destPoint(lat, lon, distDeg, bearingDeg) {
   var brng = toRad(bearingDeg);
@@ -543,8 +594,9 @@ function fetchWindData() {
     windCache = data;
     windForecastHours = data[0].hourly.time;
     windFetching = false;
+    var maxHours = Math.max(0, windForecastHours.length - 1);
     var slider = document.getElementById('time-slider');
-    slider.max = Math.max(0, windForecastHours.length - 1);
+    slider.max = maxHours;
     slider.value = 0;
     windSliderIdx = 0;
     updateSliderLabel();
@@ -602,20 +654,6 @@ function interpolateWind(lat, lon, timeIdx) {
   return { speed: speed, direction: direction };
 }
 
-function getWaypointArrivalTimes() {
-  if (waypoints.length === 0 || !departureTime) return [];
-  var times = [];
-  var elapsedH = 0;
-  times.push(new Date(departureTime));
-  for (var i = 1; i < waypoints.length; i++) {
-    var d = distanceNm(waypoints[i-1].lat, waypoints[i-1].lon, waypoints[i].lat, waypoints[i].lon);
-    elapsedH += d / cruisingSpeed;
-    var t = new Date(departureTime.getTime() + elapsedH * 3600000);
-    times.push(t);
-  }
-  return times;
-}
-
 function findForecastIdx(date) {
   if (windForecastHours.length === 0) return 0;
   var ms = date.getTime();
@@ -657,37 +695,32 @@ function clearWindArrows() {
   gridArrows = [];
 }
 
+function getForecastHour(offsetHours) {
+  if (!departureTime || windForecastHours.length === 0) return 0;
+  return findForecastIdx(new Date(departureTime.getTime() + offsetHours * 3600000));
+}
+
 function renderWindOverlay() {
   clearWindArrows();
   if (!windEnabled || !windCache) return;
-  var hourIdx = windSliderIdx;
-  if (hourIdx >= windForecastHours.length) hourIdx = windForecastHours.length - 1;
+  var offsetH = windSliderIdx;
+  var fi = getForecastHour(offsetH);
+  if (fi >= windForecastHours.length) fi = windForecastHours.length - 1;
+  var timeStr = (windForecastHours[fi] || '').slice(11, 16) + 'Z';
   for (var gi = 0; gi < windGridLats.length; gi++) {
     for (var gj = 0; gj < windGridLons.length; gj++) {
-      var w = interpolateWind(windGridLats[gi], windGridLons[gj], hourIdx);
+      var w = interpolateWind(windGridLats[gi], windGridLons[gj], fi);
       if (w && w.speed > 0) {
         var arr = drawArrow(windGridLats[gi], windGridLons[gj], w.speed, w.direction, false, Math.round(w.speed) + ' kn from ' + Math.round(w.direction) + '°');
         gridArrows.push(arr[0], arr[1]);
       }
     }
   }
-  if (waypoints.length > 0 && (windMode === 'fixed' || departureTime)) {
-    var times = null;
-    if (windMode === 'route') times = getWaypointArrivalTimes();
-    for (var wi = 0; wi < waypoints.length; wi++) {
-      var fi, timeStr;
-      if (windMode === 'fixed') {
-        fi = windSliderIdx;
-        timeStr = (windForecastHours[fi] || '').slice(11, 16) + 'Z';
-      } else {
-        fi = findForecastIdx(times[wi]);
-        timeStr = times[wi].toISOString().slice(11, 16) + 'Z';
-      }
-      var w = interpolateWind(waypoints[wi].lat, waypoints[wi].lon, fi);
-      if (w && w.speed > 0) {
-        var arr = drawArrow(waypoints[wi].lat, waypoints[wi].lon, w.speed, w.direction, true, Math.round(w.speed) + ' kn from ' + Math.round(w.direction) + '° at ' + timeStr);
-        waypointArrows.push(arr[0], arr[1]);
-      }
+  for (var wi = 0; wi < waypoints.length; wi++) {
+    var w = interpolateWind(waypoints[wi].lat, waypoints[wi].lon, fi);
+    if (w && w.speed > 0) {
+      var arr = drawArrow(waypoints[wi].lat, waypoints[wi].lon, w.speed, w.direction, true, Math.round(w.speed) + ' kn from ' + Math.round(w.direction) + '° at ' + timeStr);
+      waypointArrows.push(arr[0], arr[1]);
     }
   }
 }
@@ -696,11 +729,7 @@ function updateWindOverlay() {
   if (!windEnabled) return;
   if (!windCache) { fetchWindData(); return; }
   renderWindOverlay();
-  if (windMode === 'route' && (waypoints.length < 2 || !departureTime)) {
-    showWindNote('Route-dependent wind not shown — plot a route and set departure time');
-  } else {
-    hideWindNote();
-  }
+  hideWindNote();
 }
 
 function showWindNote(msg) {
@@ -758,12 +787,6 @@ function onSpeedChange() {
 function onSliderChange() {
   windSliderIdx = parseInt(document.getElementById('time-slider').value);
   updateSliderLabel();
-  if (windEnabled && windCache) renderWindOverlay();
-}
-
-function onWindModeChange() {
-  var r = document.querySelector('input[name="wind-mode"][value="route"]');
-  windMode = r && r.checked ? 'route' : 'fixed';
   if (windEnabled && windCache) renderWindOverlay();
 }
 
@@ -909,11 +932,17 @@ function updateCursorCoord(latlng) {
 
 function updateSliderLabel() {
   var el = document.getElementById('slider-label');
-  if (windForecastHours.length > 0 && windSliderIdx < windForecastHours.length) {
-    el.textContent = windForecastHours[windSliderIdx].slice(11, 16) + 'Z';
+  if (windForecastHours.length > 0) {
+    var fi = getForecastHour(windSliderIdx);
+    var timeStr = (windForecastHours[fi] || '').slice(11, 16) + 'Z';
+    el.textContent = '+' + windSliderIdx + 'h (' + timeStr + ')';
   } else {
     el.textContent = '—';
   }
+}
+
+function togglePanel() {
+  document.getElementById('panel').classList.toggle('open');
 }
 
 initMap();
