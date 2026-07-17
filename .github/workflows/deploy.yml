@@ -17,7 +17,7 @@ jobs:
       - name: Inject build number
         run: |
           BUILD_NUM="${{ github.run_number }}"
-          TIMESTAMP="$(date -u +'%Y-%m-%d %H:%M UTC')"
+          TIMESTAMP="$(TZ='Europe/London' date +'%Y-%m-%d %H:%M %Z')"
           sed -i "s/<!--BUILD_NUMBER-->/${BUILD_NUM} — ${TIMESTAMP}/" index.html
       - uses: actions/upload-pages-artifact@v3
         with:
