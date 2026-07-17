@@ -855,11 +855,12 @@ function clearMeasureArrow() {
 function makeMeasureMarker(lat, lon, label) {
   var marker = L.marker([lat, lon], {
     draggable: true,
+    bubblingMouseEvents: false,
     icon: L.divIcon({
       className: '',
-      html: '<div style="width:14px;height:14px;background:#dc3545;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.4);cursor:grab;"></div>',
-      iconSize: [14, 14],
-      iconAnchor: [7, 7]
+      html: '<div style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;"><div style="width:14px;height:14px;background:#dc3545;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.4);cursor:grab;"></div></div>',
+      iconSize: [44, 44],
+      iconAnchor: [22, 22]
     })
   }).addTo(map);
   marker.bindTooltip(label + ': ' + lat.toFixed(5) + ', ' + lon.toFixed(5), { sticky: true });
