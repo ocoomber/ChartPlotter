@@ -381,33 +381,36 @@ function renderWaypointList() {
     return;
   }
 
-  countEl.textContent = waypoints.length;
+  if (waypoints.length === 1) {
+    container.innerHTML =
+      '<div id="empty-state">' +
+      '<div style="font-size:13px;color:#6c757d;">1 waypoint placed</div>' +
+      '<div style="margin-top:4px;font-size:12px;color:#adb5bd;">Add another to build a leg.</div>' +
+      '</div>';
+    countEl.textContent = '1';
+    document.querySelector('#total-row .total-value').textContent = '—';
+    return;
+  }
 
-  var html = '<table><thead><tr><th>#</th><th>Lat</th><th>Lon</th><th>Dist</th><th>Brg</th><th></th></tr></thead><tbody>';
+  countEl.textContent = waypoints.length + ' wps, ' + (waypoints.length - 1) + ' legs';
+
+  var html = '<table><thead><tr><th>Leg</th><th>Via</th><th>Dist</th><th>Brg</th><th></th></tr></thead><tbody>';
   var total = 0;
 
-  for (var i = 0; i < waypoints.length; i++) {
-    var wp = waypoints[i];
-    var segDist = '';
-    var segBrg = '';
-    if (i > 0) {
-      var prev = waypoints[i - 1];
-      var d = distanceNm(prev.lat, prev.lon, wp.lat, wp.lon);
-      var b = bearing(prev.lat, prev.lon, wp.lat, wp.lon);
-      segDist = d.toFixed(1);
-      var brgStr = Math.round(b).toString().padStart(3, '0') + '°T';
-      var m = magBearing(b);
-      if (m !== null) brgStr += ' / ' + Math.round(m).toString().padStart(3, '0') + '°M';
-      segBrg = brgStr;
-      total += d;
-    }
+  for (var i = 0; i < waypoints.length - 1; i++) {
+    var p1 = waypoints[i], p2 = waypoints[i + 1];
+    var d = distanceNm(p1.lat, p1.lon, p2.lat, p2.lon);
+    var b = bearing(p1.lat, p1.lon, p2.lat, p2.lon);
+    var brgStr = Math.round(b).toString().padStart(3, '0') + '°T';
+    var m = magBearing(b);
+    if (m !== null) brgStr += ' / ' + Math.round(m).toString().padStart(3, '0') + '°M';
+    total += d;
     html += '<tr>' +
       '<td class="num">' + (i + 1) + '</td>' +
-      '<td class="coord">' + wp.lat.toFixed(5) + '</td>' +
-      '<td class="coord">' + wp.lon.toFixed(5) + '</td>' +
-      '<td class="dist">' + (segDist ? segDist + ' NM' : '—') + '</td>' +
-      '<td class="brg">' + (segBrg || '—') + '</td>' +
-      '<td><button class="wp-remove" onclick="removeWaypoint(' + i + ')" title="Remove waypoint">✕</button></td>' +
+      '<td class="coord">' + (i + 1) + ' → ' + (i + 2) + '</td>' +
+      '<td class="dist">' + d.toFixed(1) + ' NM</td>' +
+      '<td class="brg">' + brgStr + '</td>' +
+      '<td><button class="wp-remove" onclick="removeWaypoint(' + (i + 1) + ')" title="Remove leg">✕</button></td>' +
       '</tr>';
   }
   html += '</tbody></table>';
