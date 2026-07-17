@@ -259,6 +259,7 @@ function initMap() {
   map.on('mousemove', function(e) {
     updateCursorCoord(e.latlng);
   });
+  setDepartureMinMax();
 }
 
 function addWaypoint(lat, lon) {
@@ -757,8 +758,9 @@ function toggleWind() {
   windEnabled = cb.checked;
   if (windEnabled) {
     body.classList.add('open');
+    setDepartureMinMax();
     var dtInput = document.getElementById('departure-time');
-    if (!dtInput.value) {
+    if (!dtInput.value || dtInput.value < dtInput.min || dtInput.value > dtInput.max) {
       var now = new Date();
       var pad = function(n) { return String(n).padStart(2, '0'); };
       dtInput.value = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes());
@@ -772,10 +774,27 @@ function toggleWind() {
   }
 }
 
+function setDepartureMinMax() {
+  var now = new Date();
+  var pad = function(n) { return String(n).padStart(2, '0'); };
+  var min = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+  var maxDate = new Date(now);
+  maxDate.setDate(maxDate.getDate() + 15);
+  var max = maxDate.getFullYear() + '-' + pad(maxDate.getMonth() + 1) + '-' + pad(maxDate.getDate()) + 'T' + pad(maxDate.getHours()) + ':' + pad(maxDate.getMinutes());
+  var el = document.getElementById('departure-time');
+  el.min = min;
+  el.max = max;
+}
+
 function onDepartureChange() {
   var val = document.getElementById('departure-time').value;
   departureTime = val ? new Date(val + ':00') : null;
   if (windEnabled && windCache) renderWindOverlay();
+  if (windEnabled && departureTime && !getWindDateRange()) {
+    showWindNote('Departure time is outside the 16-day forecast window');
+  } else if (windEnabled) {
+    hideWindNote();
+  }
 }
 
 function onSpeedChange() {
