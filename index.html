@@ -826,6 +826,7 @@ var measureLine = null;
 var measureMarkers = [];
 var measureLabel = null;
 var measureArrow = [];
+var measureDragging = false;
 
 function toggleMeasure() {
   measureEnabled = !measureEnabled;
@@ -865,11 +866,14 @@ function makeMeasureMarker(lat, lon, label) {
       iconAnchor: [22, 22]
     })
   }).addTo(map);
+  marker.on('dragstart', function() { measureDragging = true; });
+  marker.on('dragend', function() { measureDragging = false; });
   marker.bindTooltip(label + ': ' + lat.toFixed(5) + ', ' + lon.toFixed(5), { sticky: true });
   return marker;
 }
 
 function doMeasureClick(latlng) {
+  if (measureDragging) return;
   if (measurePoints.length >= 2) clearMeasure();
   var ll = { lat: roundCoord(latlng.lat), lon: roundCoord(latlng.lng) };
   measurePoints.push(ll);
