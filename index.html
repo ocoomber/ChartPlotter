@@ -540,12 +540,13 @@ function buildWindGrid() {
     latMin = c.lat - 1.5; latMax = c.lat + 1.5;
     lonMin = c.lng - 1.5; lonMax = c.lng + 1.5;
   }
+  var nGrid = 13;
   var lats = [], lons = [];
-  for (var i = 0; i < 7; i++) lats.push(+(latMin + (latMax - latMin) * i / 6).toFixed(4));
-  for (var j = 0; j < 7; j++) lons.push(+(lonMin + (lonMax - lonMin) * j / 6).toFixed(4));
+  for (var i = 0; i < nGrid; i++) lats.push(+(latMin + (latMax - latMin) * i / (nGrid - 1)).toFixed(4));
+  for (var j = 0; j < nGrid; j++) lons.push(+(lonMin + (lonMax - lonMin) * j / (nGrid - 1)).toFixed(4));
   var points = [];
-  for (var i = 0; i < 7; i++) {
-    for (var j = 0; j < 7; j++) points.push({ lat: lats[i], lon: lons[j] });
+  for (var i = 0; i < nGrid; i++) {
+    for (var j = 0; j < nGrid; j++) points.push({ lat: lats[i], lon: lons[j] });
   }
   return { lats: lats, lons: lons, points: points };
 }
@@ -618,7 +619,7 @@ function interpolateWind(lat, lon, timeIdx) {
   var lat0 = windGridLats[li], lat1 = windGridLats[li + 1];
   var lon0 = windGridLons[lj], lon1 = windGridLons[lj + 1];
   function getUV(gi, gj, ti) {
-    var idx = gi * 7 + gj;
+    var idx = gi * windGridLats.length + gj;
     var spd = windCache[idx].hourly.wind_speed_10m[ti];
     var dir = windCache[idx].hourly.wind_direction_10m[ti];
     if (spd == null || dir == null) return null;
