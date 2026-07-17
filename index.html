@@ -394,7 +394,7 @@ function renderWaypointList() {
 
   countEl.textContent = waypoints.length + ' wps, ' + (waypoints.length - 1) + ' legs';
 
-  var html = '<table><thead><tr><th>Leg</th><th>Via</th><th>Dist</th><th>Brg</th><th></th></tr></thead><tbody>';
+  var html = '<table><thead><tr><th>Leg</th><th>Dist</th><th>Brg</th><th></th></tr></thead><tbody>';
   var total = 0;
 
   for (var i = 0; i < waypoints.length - 1; i++) {
@@ -407,7 +407,6 @@ function renderWaypointList() {
     total += d;
     html += '<tr>' +
       '<td class="num">' + (i + 1) + '</td>' +
-      '<td class="coord">' + (i + 1) + ' → ' + (i + 2) + '</td>' +
       '<td class="dist">' + d.toFixed(1) + ' NM</td>' +
       '<td class="brg">' + brgStr + '</td>' +
       '<td><button class="wp-remove" onclick="removeWaypoint(' + (i + 1) + ')" title="Remove leg">✕</button></td>' +
