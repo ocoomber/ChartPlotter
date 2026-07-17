@@ -507,8 +507,9 @@ var windGridLons = null;
 var windForecastHours = [];
 var windSliderIdx = 0;
 var waypointArrows = [];
-var gridArrows = [];
+var gridArrowsLayer = null;
 var windFetching = false;
+var windGridBounds = null;
 
 function destPoint(lat, lon, distDeg, bearingDeg) {
   var brng = toRad(bearingDeg);
@@ -544,6 +545,7 @@ function buildWindGrid() {
     latMin = c.lat - 1.5; latMax = c.lat + 1.5;
     lonMin = c.lng - 1.5; lonMax = c.lng + 1.5;
   }
+  windGridBounds = { latMin: latMin, latMax: latMax, lonMin: lonMin, lonMax: lonMax };
   var nGrid = 21;
   var lats = [], lons = [];
   for (var i = 0; i < nGrid; i++) lats.push(+(latMin + (latMax - latMin) * i / (nGrid - 1)).toFixed(4));
@@ -553,6 +555,38 @@ function buildWindGrid() {
     for (var j = 0; j < nGrid; j++) points.push({ lat: lats[i], lon: lons[j] });
   }
   return { lats: lats, lons: lons, points: points };
+}
+
+function routeOutsideWindGrid() {
+  if (!windGridBounds) return true;
+  for (var i = 0; i < waypoints.length; i++) {
+    var w = waypoints[i];
+    if (w.lat < windGridBounds.latMin || w.lat > windGridBounds.latMax ||
+        w.lon < windGridBounds.lonMin || w.lon > windGridBounds.lonMax) return true;
+  }
+  return false;
+}
+
+function subdivideCoords(coords, factor) {
+  var out = [];
+  for (var i = 0; i < coords.length - 1; i++) {
+    for (var k = 0; k < factor; k++) out.push(coords[i] + (coords[i + 1] - coords[i]) * k / factor);
+  }
+  out.push(coords[coords.length - 1]);
+  return out;
+}
+
+function arrowSubpaths(lat, lon, speed, dir, sizeScale) {
+  var downwind = (dir + 180) % 360;
+  var s = sizeScale || 1;
+  var base = destPoint(lat, lon, 0.008 * s, dir);
+  var tip = destPoint(base.lat, base.lon, 0.01 * s, downwind);
+  var left = destPoint(tip.lat, tip.lon, 0.005 * s, (dir + 30) % 360);
+  var right = destPoint(tip.lat, tip.lon, 0.005 * s, ((dir - 30) + 360) % 360);
+  return [
+    [[base.lat, base.lon], [tip.lat, tip.lon]],
+    [[tip.lat, tip.lon], [left.lat, left.lon], [tip.lat, tip.lon], [right.lat, right.lon]]
+  ];
 }
 
 function getWindDateRange() {
@@ -694,11 +728,8 @@ function clearWindArrows() {
   for (var i = 0; i < waypointArrows.length; i++) {
     map.removeLayer(waypointArrows[i]);
   }
-  for (var i = 0; i < gridArrows.length; i++) {
-    map.removeLayer(gridArrows[i]);
-  }
   waypointArrows = [];
-  gridArrows = [];
+  if (gridArrowsLayer) { map.removeLayer(gridArrowsLayer); gridArrowsLayer = null; }
 }
 
 function forecastLocalTime(idx) {
@@ -719,15 +750,31 @@ function renderWindOverlay() {
   var fi = getForecastHour(offsetH);
   if (fi >= windForecastHours.length) fi = windForecastHours.length - 1;
   var timeStr = forecastLocalTime(fi);
-  for (var gi = 0; gi < windGridLats.length; gi++) {
-    for (var gj = 0; gj < windGridLons.length; gj++) {
-      var w = interpolateWind(windGridLats[gi], windGridLons[gj], fi);
+
+  // Display grid is denser than the fetched forecast grid (2x per axis) so
+  // arrows read as a continuous field, but this costs no extra API calls -
+  // it's just bilinear interpolation of data we already have. All grid
+  // arrows are batched into a single polyline layer (one DOM/SVG element)
+  // instead of one layer per arrow, which is what actually keeps this fast
+  // on mobile even at ~4x the arrow count.
+  var denseLats = subdivideCoords(windGridLats, 2);
+  var denseLons = subdivideCoords(windGridLons, 2);
+  var gridSegments = [];
+  for (var gi = 0; gi < denseLats.length; gi++) {
+    for (var gj = 0; gj < denseLons.length; gj++) {
+      var w = interpolateWind(denseLats[gi], denseLons[gj], fi);
       if (w && w.speed > 0) {
-        var arr = drawArrow(windGridLats[gi], windGridLons[gj], w.speed, w.direction, false, Math.round(w.speed) + ' kn from ' + Math.round(w.direction) + '°');
-        gridArrows.push(arr[0], arr[1]);
+        var sub = arrowSubpaths(denseLats[gi], denseLons[gj], w.speed, w.direction, 0.8);
+        gridSegments.push(sub[0], sub[1]);
       }
     }
   }
+  if (gridSegments.length) {
+    gridArrowsLayer = L.polyline(gridSegments, {
+      color: '#6b21a8', weight: 1.6, opacity: 0.85
+    }).addTo(map);
+  }
+
   for (var wi = 0; wi < waypoints.length; wi++) {
     var w = interpolateWind(waypoints[wi].lat, waypoints[wi].lon, fi);
     if (w && w.speed > 0) {
@@ -739,7 +786,7 @@ function renderWindOverlay() {
 
 function updateWindOverlay() {
   if (!windEnabled) return;
-  if (!windCache) { fetchWindData(); return; }
+  if (!windCache || routeOutsideWindGrid()) { fetchWindData(); return; }
   renderWindOverlay();
   hideWindNote();
 }
@@ -826,7 +873,8 @@ var measureLine = null;
 var measureMarkers = [];
 var measureLabel = null;
 var measureArrow = [];
-var measureDragging = false;
+var measureDragIdx = -1;
+var measurePointerListenersBound = false;
 
 function toggleMeasure() {
   measureEnabled = !measureEnabled;
@@ -855,44 +903,63 @@ function clearMeasureArrow() {
   measureArrow = [];
 }
 
-function makeMeasureMarker(lat, lon, label) {
-  var marker = L.marker([lat, lon], {
-    draggable: true,
-    bubblingMouseEvents: false,
-    icon: L.divIcon({
-      className: '',
-      html: '<div style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;"><div style="width:14px;height:14px;background:#dc3545;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.4);cursor:grab;"></div></div>',
-      iconSize: [44, 44],
-      iconAnchor: [22, 22]
-    })
-  }).addTo(map);
-  marker.on('dragstart', function() { measureDragging = true; });
-  marker.on('dragend', function() { measureDragging = false; });
-  marker.bindTooltip(label + ': ' + lat.toFixed(5) + ', ' + lon.toFixed(5), { sticky: true });
-  if (marker._icon) {
-    L.DomEvent.on(marker._icon, 'touchstart', L.DomEvent.stopPropagation);
-    L.DomEvent.on(marker._icon, 'touchmove', L.DomEvent.stopPropagation);
-    L.DomEvent.on(marker._icon, 'touchend', L.DomEvent.stopPropagation);
+function bindMeasurePointerHandlers() {
+  if (measurePointerListenersBound) return;
+  measurePointerListenersBound = true;
+  var container = map.getContainer();
+  L.DomEvent.on(container, 'pointermove', function(e) {
+    if (measureDragIdx === -1) return;
+    L.DomEvent.stop(e);
+    onMeasureDrag(measureDragIdx, map.mouseEventToLatLng(e));
+  });
+  function endDrag(e) {
+    if (measureDragIdx === -1) return;
+    onMeasureDragEnd(measureDragIdx);
+    measureDragIdx = -1;
+    map.dragging.enable();
   }
+  L.DomEvent.on(container, 'pointerup', endDrag);
+  L.DomEvent.on(container, 'pointercancel', endDrag);
+}
+
+function makeMeasureMarker(lat, lon, label, idx) {
+  var marker = L.circleMarker([lat, lon], {
+    radius: 9,
+    color: '#fff',
+    weight: 2,
+    fillColor: '#dc3545',
+    fillOpacity: 1,
+    interactive: true,
+    bubblingMouseEvents: false
+  }).addTo(map);
+  marker.bindTooltip(label + ': ' + lat.toFixed(5) + ', ' + lon.toFixed(5), { sticky: true });
+  bindMeasurePointerHandlers();
+  marker.on('mousedown', function(e) { L.DomEvent.stop(e); });
+  L.DomEvent.on(marker._path, 'pointerdown', function(e) {
+    L.DomEvent.stop(e);
+    measureDragIdx = idx;
+    map.dragging.disable();
+    if (marker._path.setPointerCapture) {
+      try { marker._path.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+  });
   return marker;
 }
 
 function doMeasureClick(latlng) {
-  if (measureDragging) return;
+  if (measureDragIdx !== -1) return;
   if (measurePoints.length >= 2) clearMeasure();
   var ll = { lat: roundCoord(latlng.lat), lon: roundCoord(latlng.lng) };
   measurePoints.push(ll);
   var idx = measureMarkers.length;
-  var marker = makeMeasureMarker(ll.lat, ll.lon, idx === 0 ? 'A' : 'B');
-  marker.on('drag', function() { onMeasureDrag(idx); });
-  marker.on('dragend', function() { onMeasureDragEnd(idx); });
+  var marker = makeMeasureMarker(ll.lat, ll.lon, idx === 0 ? 'A' : 'B', idx);
   measureMarkers.push(marker);
   if (measurePoints.length === 2) updateMeasureLine();
 }
 
-function onMeasureDrag(idx) {
-  var ll = measureMarkers[idx].getLatLng();
-  measurePoints[idx] = { lat: roundCoord(ll.lat), lon: roundCoord(ll.lng) };
+function onMeasureDrag(idx, latlng) {
+  measurePoints[idx] = { lat: roundCoord(latlng.lat), lon: roundCoord(latlng.lng) };
+  measureMarkers[idx].setLatLng([measurePoints[idx].lat, measurePoints[idx].lon]);
   measureMarkers[idx].setTooltipContent((idx === 0 ? 'A' : 'B') + ': ' + measurePoints[idx].lat.toFixed(5) + ', ' + measurePoints[idx].lon.toFixed(5));
   if (measurePoints.length === 2) {
     measureLine.setLatLngs([[measurePoints[0].lat, measurePoints[0].lon], [measurePoints[1].lat, measurePoints[1].lon]]);
